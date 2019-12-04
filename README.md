@@ -61,7 +61,7 @@ In the field of reinforcement learning there has been recent progress towards sa
   <img src="figs/noisydemo_bound_error_overAlpha.png" width="350">
 </div>
 
-   - Note that the bounds when c=0 are different than shown in paper. We are working on determining the reason for this discrepancy.
+  
   
   
   #### Comparison with theoretical bounds (Table 1 in in [AAAI 2018 paper](https://arxiv.org/abs/1707.00724))
