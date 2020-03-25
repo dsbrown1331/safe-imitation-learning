@@ -7,18 +7,41 @@
 
 double evaluateExpectedReturn(const vector<unsigned int> & policy, 
                     const MDP* evalMDP, double eps);
-                    
+double evaluateExpectedReturn(vector<vector<double> > & policy, 
+                    const MDP* evalMDP, double eps);                    
                     
 void policyValueIteration(const vector<unsigned int> & policy, 
+                    const MDP* evalMDP, double eps, double* V);
+                    
+void policyValueIteration(vector<vector<double> > & policy, 
                     const MDP* evalMDP, double eps, double* V);
                     
 double getExpectedReturn(const MDP* mdp);
 double getAverageValueFromStartStates(double* V, bool* init, unsigned int numStates);
 double** calculateStateExpectedFeatureCounts(vector<unsigned int> & policy, FeatureGridMDP* fmdp, double eps);
+double* calculateExpectedFeatureCounts(vector<vector<double> > & policy, FeatureGridMDP* fmdp, double eps);
 double* calculateExpectedFeatureCounts(vector<unsigned int> & policy, FeatureGridMDP* fmdp, double eps);
 double* calculateEmpiricalExpectedFeatureCounts(vector<vector<pair<unsigned int,unsigned int> > > trajectories, FeatureGridMDP* fmdp);
 
 double evaluateExpectedReturn(const vector<unsigned int> & policy, 
+                    const MDP* evalMDP, double eps)
+{
+    //initialize values to zero
+    unsigned int numStates = evalMDP->getNumStates();
+    double V[numStates];
+    for(unsigned int i=0; i<numStates; i++) V[i] = 0.0;
+    
+    //get value of policy in evalMDP
+    policyValueIteration(policy, evalMDP, eps, V);
+    
+    //get expected value of policy evaluated on evalMDP over starting dist
+    //TODO assumes uniform distibution over start states
+    bool* init = evalMDP->getInitialStates();
+    return getAverageValueFromStartStates(V, init, numStates);
+}
+
+//Stochastic policy version
+double evaluateExpectedReturn(vector<vector<double> > & policy, 
                     const MDP* evalMDP, double eps)
 {
     //initialize values to zero
@@ -127,6 +150,59 @@ void policyValueIteration(const vector<unsigned int> & policy,
                 expUtil += T[s1][policy_action][s2] * V[s2];
             }
             tempV += discount * expUtil;
+
+            //update delta to track convergence
+            double absDiff = abs(tempV - V[s1]);
+            if(absDiff > delta)
+                delta = absDiff;
+            V[s1] = tempV;
+        }
+        
+    }
+    while(delta > eps);
+
+}
+
+//Stochastic policy version
+//Updates vector of values V to be value of using policy in evalMDP
+//run value iteration until convergence using policy actions rather than argmax
+void policyValueIteration(vector<vector<double> > & policy, 
+                    const MDP* evalMDP, double eps, double* V)
+{
+    double delta;
+    double discount = evalMDP->getDiscount();
+    double*** T = evalMDP->getTransitions();
+    //repeat until convergence within error eps
+    do
+    {
+        unsigned int numStates = evalMDP->getNumStates();
+        unsigned int numActions = evalMDP->getNumActions();
+
+        //cout << "--------" << endl;
+        //displayAsGrid(V);
+        delta = 0;
+        //update value of each state
+       // cout << eps * (1 - discount) / discount << "," << delta << endl;
+        
+        for(unsigned int s1 = 0; s1 < numStates; s1++)
+        {
+            double tempV = 0;
+            //add reward
+            tempV += evalMDP->getReward(s1);
+            //add discounted value of next state based on stochastic policy action
+            for(unsigned int a = 0; a < numActions; a++)
+            {
+                double policy_action_prob = policy[s1][a];
+                //calculate expected utility of taking action a in state s1
+                double expUtil = 0;
+                
+                for(unsigned int s2 = 0; s2 < numStates; s2++)
+                {
+                    expUtil += T[s1][a][s2] * V[s2];
+                }
+                tempV += discount * policy_action_prob * expUtil;
+            
+            }
 
             //update delta to track convergence
             double absDiff = abs(tempV - V[s1]);
@@ -360,6 +436,39 @@ double** calculateStateExpectedFeatureCounts(vector<vector<double> > & policy, F
     return  featureCounts;
 }
 
+
+//Stochastic policy version. 
+double* calculateExpectedFeatureCounts(vector<vector<double> > & policy, FeatureGridMDP* fmdp, double eps)
+{
+    //average over initial state distribution (assumes all initial states equally likely)
+    double** stateFcounts = calculateStateExpectedFeatureCounts(policy, fmdp, eps);
+    unsigned int numStates = fmdp -> getNumStates();
+    unsigned int numFeatures = fmdp -> getNumFeatures();
+    int numInitialStates = 0;
+    
+    double* expFeatureCounts = new double[numFeatures];
+    fill(expFeatureCounts, expFeatureCounts + numFeatures, 0);
+    
+    for(unsigned int s = 0; s < numStates; s++)
+        if(fmdp -> isInitialState(s))
+        {
+            numInitialStates++;
+            for(unsigned int f = 0; f < numFeatures; f++)
+                expFeatureCounts[f] += stateFcounts[s][f];
+        }
+                
+    //divide by number of initial states
+    for(unsigned int f = 0; f < numFeatures; f++)
+        expFeatureCounts[f] /= numInitialStates;
+    
+    //clean up
+    for(unsigned int s = 0; s < numStates; s++)
+        delete[] stateFcounts[s];
+    delete[] stateFcounts;    
+    
+    return expFeatureCounts;
+
+}
 
 
 double* calculateExpectedFeatureCounts(vector<unsigned int> & policy, FeatureGridMDP* fmdp, double eps)

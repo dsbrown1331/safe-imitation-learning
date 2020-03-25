@@ -5,21 +5,24 @@
 #include "../include/confidence_bounds.hpp"
 #include "../include/unit_norm_sampling.hpp"
 #include "../include/feature_birl.hpp"
+#include "../include/abbeel_projection.hpp"
 #include <fstream>
 #include <string>
 
-//Compare proposed probabilistic upper bound on policy evaluation with worst-case bound
-
-//Code to run experiment shown in Figure 2 in "Efficient Probabilistic Performance Bounds for Inverse Reinforcement Learning" from AAAI 2018.
+// Test non-i.i.d. setting where the same demonstration is given over and over and see what the bounds look like
+//Test using Abbeel projection algorithm as evaluation policy to compare our bound
+//with the theoretical bound proved by Syed and Schapire.
 
 using namespace std;
+
 
 int main() 
 {
 
     ////Experiment parameters
+    double epsilon = 0.001;  //for abbeel algorithm
     const unsigned int reps = 200;                    //repetitions per setting
-    const vector<unsigned int> numDemos = {1,3,5,7,9};            //number of demos to give
+    const vector<unsigned int> numDemos = {1,5,10,100};            //number of demos to give
     const vector<unsigned int> rolloutLengths = {100};          //max length of each demo
     const vector<double> alphas = {100}; //50                    //confidence param for BIRL
     const unsigned int chain_length = 10000;//1000;//5000;        //length of MCMC chain
@@ -30,7 +33,7 @@ int main()
     const double min_r = -1;
     const double max_r = 1;
     bool removeDuplicates = true;
-    bool stochastic = true;
+    bool stochastic = false;
 
     int startSeed = 132;
     double eps = 0.001;
@@ -43,12 +46,13 @@ int main()
     //double** stateFeatures = initFeaturesToyFeatureDomain5x5(numStates, numFeatures);  
 //    double** stateFeatures = random9x9GridNavGoalWorld();
 //    double** stateFeatures = random9x9GridNavGoalWorld8Features();
-    vector<unsigned int> initStates = {10, 13, 16, 37, 40, 43, 64, 67, 70};
+    vector<unsigned int> initStates = {10, 13, 16, 37, 40, 43, 64, 67, 70};  //these are the initial states that the policy might start from
     vector<unsigned int> termStates = {};
     
+    vector<unsigned int> demoStates = {10}; //These are the states from which demonstrations are given
     
     //create directory for results
-    string filePath = "./data/gridworld/";
+    string filePath = "./data/abbeel_projection/";
     string mkdirFilePath = "mkdir -p " + filePath;
     system(mkdirFilePath.c_str());
 
@@ -68,13 +72,14 @@ for(unsigned int rolloutLength : rolloutLengths)
             for(unsigned int rep = 0; rep < reps; rep++)
             {
                 //set up file for output
-                string filename = "GridWorldInfHorizon_numdemos" +  to_string(numDemo) 
+                string filename = "ProjectionEvalRepeatedDemo_numdemos" +  to_string(numDemo) 
                                 + "_alpha" + to_string((int)alpha) 
                                 + "_chain" + to_string(chain_length) 
                                 + "_step" + to_string(step)
                                 + "_L1sampleflag" + to_string(sample_flag) 
                                 + "_rolloutLength" + to_string(rolloutLength)
                                 + "_stochastic" + to_string(stochastic)
+                                + "_removedups" + to_string(removeDuplicates)
                                 + "_rep" + to_string(rep)+ ".txt";
                 cout << filename << endl; 
                 ofstream outfile(filePath + filename);
@@ -111,7 +116,7 @@ for(unsigned int rolloutLength : rolloutLengths)
                 trajectories.clear(); //used for feature counts
                 for(unsigned int d = 0; d < numDemo; d++)
                 {
-                   unsigned int s0 = initStates[d % initStates.size()];
+                   unsigned int s0 = demoStates[d % demoStates.size()];
                    //cout << "demo from " << s0 << endl;
                    vector<pair<unsigned int, unsigned int>> traj = fmdp.monte_carlo_argmax_rollout(s0, rolloutLength);
                    //cout << "trajectory " << d << endl;
@@ -136,33 +141,18 @@ for(unsigned int rolloutLength : rolloutLengths)
 
 
 
-                ///  run BIRL to get chain and Map policyLoss ///
+                ///  run BIRL to get chain///
                 //give it a copy of mdp to initialize
                 FeatureBIRL birl(&fmdp, min_r, max_r, chain_length, step, alpha, sample_flag, mcmc_reject_flag, num_steps);
                 birl.addPositiveDemos(good_demos);
                 birl.displayDemos();
                 birl.run();
-                FeatureGridMDP* mapMDP = birl.getMAPmdp();
-                mapMDP->displayFeatureWeights();
-                //cout << "Recovered reward" << endl;
-                //mapMDP->displayRewards();
-
-                //solve for the optimal policy
-                vector<unsigned int> eval_pi (mapMDP->getNumStates());
-                mapMDP->valueIteration(eps);
-                mapMDP->calculateQValues();
-                mapMDP->getOptimalPolicy(eval_pi);
-//                cout << "-- value function ==" << endl;
-//                mapMDP->displayValues();
-//                mapMDP->deterministicPolicyIteration(map_policy);
-//                cout << "-- optimal policy --" << endl;
-                //mapMDP->displayPolicy(eval_pi);
-                //cout << "\nPosterior Probability: " << birl.getMAPposterior() << endl;
-                //double base_loss = policyLoss(eval_pi, &fmdp);
-                //cout << "Current policy loss: " << base_loss << "%" << endl;
-
-                /// We use the Map Policy as the evaluation policy
-
+                
+                /// run Abbeel projection to get evaluation policy ///
+                ProjectionIRL projectionIRL(&fmdp);
+                vector<unsigned int> eval_pi(fmdp.getNumStates());
+                projectionIRL.getProjectionPolicy(eval_pi, trajectories, epsilon);
+                
                 
                 
                 //write actual, worst-case, and chain info to file

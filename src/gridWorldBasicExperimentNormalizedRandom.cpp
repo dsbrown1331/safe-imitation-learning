@@ -8,7 +8,9 @@
 #include <fstream>
 #include <string>
 
-//Compare proposed probabilistic upper bound on policy evaluation with worst-case bound
+//Compare proposed probabilistic upper bound on policy evaluation
+//Uses a normalized version of policy evaluation that is with respect to optimal and random
+// policy loss = (V* - Veval) / (V* - Vrand) where Vrand is the expected value of a uniformly random policy.
 
 //Code to run experiment shown in Figure 2 in "Efficient Probabilistic Performance Bounds for Inverse Reinforcement Learning" from AAAI 2018.
 
@@ -38,6 +40,7 @@ int main()
     //test arrays to get features
     const int numFeatures = 8; //white, red, blue, yellow, green
     const int numStates = 81;
+    const int numActions = 4;
     const int size = 9;
     double gamma = 0.9;
     //double** stateFeatures = initFeaturesToyFeatureDomain5x5(numStates, numFeatures);  
@@ -51,6 +54,18 @@ int main()
     string filePath = "./data/gridworld/";
     string mkdirFilePath = "mkdir -p " + filePath;
     system(mkdirFilePath.c_str());
+    
+    //Create uniformly random policy for baseline:
+    vector<vector<double> > random_pi;
+    for(unsigned int s = 0; s < numStates; s++)
+    {
+        vector<double> action_probs(numActions);
+        random_pi.push_back(action_probs);
+        for(unsigned int a = 0; a < numActions; a++)
+        {
+            random_pi[s][a] = 1.0 / numActions;
+        }
+   }
 
 for(unsigned int rolloutLength : rolloutLengths)
 {
@@ -68,7 +83,7 @@ for(unsigned int rolloutLength : rolloutLengths)
             for(unsigned int rep = 0; rep < reps; rep++)
             {
                 //set up file for output
-                string filename = "GridWorldInfHorizon_numdemos" +  to_string(numDemo) 
+                string filename = "NormalizedRandomEVD_GridWorldInfHorizon_numdemos" +  to_string(numDemo) 
                                 + "_alpha" + to_string((int)alpha) 
                                 + "_chain" + to_string(chain_length) 
                                 + "_step" + to_string(step)
@@ -82,7 +97,7 @@ for(unsigned int rolloutLength : rolloutLengths)
                 srand(startSeed + 3*rep);
                 cout << "------Rep: " << rep << "------" << endl;
 
-                //create random world //TODO delete it when done
+                //create random world
                 double** stateFeatures = random9x9GridNavWorld8Features();
         
                 vector<pair<unsigned int,unsigned int> > good_demos;
@@ -90,9 +105,20 @@ for(unsigned int rolloutLength : rolloutLengths)
               
                 ///  create a random weight vector with seed and increment of rep number so same across reps
                 double* featureWeights = sample_unit_L1_norm(numFeatures);
+               
                     
+                cout << "features" << endl;
+                for(int i=0; i < numFeatures; i++)
+                    cout << featureWeights[i] << ", ";
+                cout << endl;
+                
+                
+                   
+                //normal mdp 
                 FeatureGridMDP fmdp(size, size, initStates, termStates, numFeatures, featureWeights, stateFeatures, stochastic, gamma);
+                
                 delete[] featureWeights;
+
                 ///  solve mdp for weights and get optimal policyLoss
                 vector<unsigned int> opt_policy (fmdp.getNumStates());
                 fmdp.valueIteration(eps);
@@ -100,18 +126,21 @@ for(unsigned int rolloutLength : rolloutLengths)
                 //mdp.displayValues();
                 cout << "features" << endl;
                 displayStateColorFeatures(stateFeatures, size, size, numFeatures);
-                fmdp.deterministicPolicyIteration(opt_policy);
+                //fmdp.deterministicPolicyIteration(opt_policy);
+                fmdp.calculateQValues();
+                fmdp.getOptimalPolicy(opt_policy);
                 cout << "-- optimal policy --" << endl;
                 fmdp.displayPolicy(opt_policy);
-                fmdp.calculateQValues();
                 cout << "-- feature weights --" << endl;
                 fmdp.displayFeatureWeights();
+                
+                
 
                 ///  generate numDemo demos from the initial state distribution
                 trajectories.clear(); //used for feature counts
                 for(unsigned int d = 0; d < numDemo; d++)
                 {
-                   unsigned int s0 = initStates[d % initStates.size()];
+                   unsigned int s0 = initStates[d];
                    //cout << "demo from " << s0 << endl;
                    vector<pair<unsigned int, unsigned int>> traj = fmdp.monte_carlo_argmax_rollout(s0, rolloutLength);
                    //cout << "trajectory " << d << endl;
@@ -168,10 +197,16 @@ for(unsigned int rolloutLength : rolloutLengths)
                 //write actual, worst-case, and chain info to file
 
                 ///compute actual expected return difference
-                double trueDiff = abs(getExpectedReturn(&fmdp) - evaluateExpectedReturn(eval_pi, &fmdp, eps));
-                cout << "True difference: " << trueDiff << endl;
+                double Vstar = getExpectedReturn(&fmdp); //optimal policy expected value under true reward
+                
+                //compute the value of a random policy under the true reward
+                double Vrand = evaluateExpectedReturn(random_pi, &fmdp, eps);
+                //calculate (V^*_{R^*} - V^{\pi_eval}_{R^*}) / (V^*_{R^*} - V^{\pi^*(-R^*)}_{R^*})
+                //this gives a normalized distance from optimal wrt to optimal-pessimal gap.
+                double trueNormedDiff = (Vstar - evaluateExpectedReturn(eval_pi, &fmdp, eps)) / (Vstar - Vrand);
+                cout << "True difference: " << trueNormedDiff << endl;
                 outfile << "#true value --- wfcb --- mcmc ratios" << endl;
-                outfile << trueDiff << endl;
+                outfile << trueNormedDiff << endl;
                 outfile << "---" << endl;
                 //compute worst-case feature count bound
                 double wfcb = calculateWorstCaseFeatureCountBound(eval_pi, &fmdp, trajectories, eps);
@@ -185,7 +220,7 @@ for(unsigned int rolloutLength : rolloutLengths)
                 {
                     //cout.precision(5);
                     //get sampleMDP from chain
-                    GridMDP* sampleMDP = (*(birl.getRewardChain() + i));
+                    FeatureGridMDP* sampleMDP = (*(birl.getRewardChain() + i));
                     //((FeatureGridMDP*)sampleMDP)->displayFeatureWeights();
                     //cout << "===================" << endl;
                     //cout << "Reward " << i << endl;
@@ -203,9 +238,13 @@ for(unsigned int rolloutLength : rolloutLengths)
                     //cout << "Eval Policy" << endl; 
                     double Vhat = evaluateExpectedReturn(eval_pi, sampleMDP, eps);
                     //cout << Vhat << endl;
-                    double VDiff = Vstar - Vhat;
-                    //cout << "diff: " << VDiff << endl;
-                    outfile << VDiff << endl;
+                    //compute the value of a random policy under the true reward
+                    double Vrand = evaluateExpectedReturn(random_pi, sampleMDP, eps);
+              
+                    
+                    double VNormedDiff = (Vstar - Vhat) / (Vstar - Vrand);
+                    //cout << "pred diff: " << VNormedDiff << endl;
+                    outfile << VNormedDiff << endl;
                 }    
            
 

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <math.h>
 //#define NDEBUG         //uncomment this to disable all asserts
 #include <assert.h> 
 #include "unit_norm_sampling.hpp"
@@ -201,6 +202,18 @@ class MDP { // General MDP
             for(unsigned int a=0; a < numActions; a++)
                 Q[s][a] = qvalues[s][a];
       }
+
+      //compute the cumulative discounted return of a trajectory
+      double computeTrajectoryReturn(vector<pair<unsigned int, unsigned int> > traj)
+      {
+        double cum_return = 0.0;
+        for(unsigned int t = 0; t < traj.size(); t++)
+        {
+          unsigned int state = traj[t].first;
+          cum_return += pow(discount, t) * getReward(state);
+        }
+        return cum_return;
+      };
       
 };
 
@@ -1371,6 +1384,7 @@ vector<pair<unsigned int, unsigned int>> MDP::epsilon_random_rollout(int s0, int
         vector<int> reachable_states;
         for(unsigned int s = 0; s < getNumStates(); s++)
         {
+            //cout << "state, a, s = " << state << ", " << a << ", " << s << endl;
             if(T[state][a][s] > 0)
             {
                 trans_probs.push_back(T[state][a][s]);
@@ -1429,8 +1443,6 @@ vector<int> argmax_all(vector<double> xs)
             arg_maxs.push_back(i);
     return arg_maxs;
 }
-
-
 
 
 #endif

@@ -24,7 +24,15 @@ def percentile(sample_data, p):
 def syed_schapire_bound(m, gamma, k, delta):
     return 3.0/(1.0-gamma) * np.sqrt(2.0/m * np.log(2.0*k/delta))
     
-def percentile_confidence_upper_bnd(sample_data, percentile, delta_conf):
+def percentile_confidence_upper_bnd(sample_data, alpha, delta_conf):
+    #sort the data
+    data_sorted = np.sort(sample_data)
+    n = len(data_sorted)
+    upper_order_idx = int(stats.binom.ppf(1-delta_conf, n, alpha))
+
+    return data_sorted[upper_order_idx]
+    
+def percentile_confidence_upper_bnd_normal(sample_data, percentile, delta_conf):
     """percentile should be a decimal, e.g. 75th percentile is 0.75, delta confidence is the true confidence, e.g. 0.95"""
     
     #sort the data

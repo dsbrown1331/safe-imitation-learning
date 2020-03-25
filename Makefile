@@ -10,11 +10,20 @@ all: birl_test feature_test mdp_test feature_birl_test conf_bound_test grid_expe
 gridworld_basic_exp: build/gridWorldBasicExperiment.o
 	$(CC) $(LFLAGS) build/gridWorldBasicExperiment.o  -o gridworld_basic_exp
 	
+gridworld_basic_exp_normalized: build/gridWorldBasicExperimentNormalized.o
+	$(CC) $(LFLAGS) build/gridWorldBasicExperimentNormalized.o  -o gridworld_basic_exp_normalized
+
+gridworld_basic_exp_normalized_random: build/gridWorldBasicExperimentNormalizedRandom.o
+	$(CC) $(LFLAGS) build/gridWorldBasicExperimentNormalizedRandom.o  -o gridworld_basic_exp_normalized_random
+	
 gridworld_noisydemo_exp: build/gridWorldNoisyDemoExperiment.o
 	$(CC) $(LFLAGS) build/gridWorldNoisyDemoExperiment.o  -o gridworld_noisydemo_exp
 	
 gridworld_projection_exp: build/gridWorldProjectionEvalExperiment.o
 	$(CC) $(LFLAGS) build/gridWorldProjectionEvalExperiment.o  -o gridworld_projection_exp
+
+gridworld_projection_exp_repeated_demo: build/gridWorldProjectionEvalExperimentRepeatedDemo.o
+	$(CC) $(LFLAGS) build/gridWorldProjectionEvalExperimentRepeatedDemo.o  -o gridworld_projection_exp_repeated_demo
 	
 improvement_exp: build/improvementExample.o
 	$(CC) $(LFLAGS) -pg build/improvementExample.o  -o improvement_exp
@@ -31,14 +40,31 @@ driving_ccounts: build/drivingBIRLCollisionCounts.o
 driving_test: build/drivingTester.o
 	$(CC) $(LFLAGS) build/drivingTester.o -o driving_test -I /usr/include/SDL -lSDL -lSDL_image -lpthread -lSDL_ttf
 	
+
+brex_test: build/brex_test.o
+	$(CC) $(LFLAGS) build/brex_test.o  -o brex_test
+
 build/gridWorldBasicExperiment.o: src/gridWorldBasicExperiment.cpp include/mdp.hpp include/confidence_bounds.hpp include/feature_birl.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp
 	$(CC) $(CFLAGS) src/gridWorldBasicExperiment.cpp -o build/gridWorldBasicExperiment.o
+
+build/brex_test.o: src/brex_test.cpp include/mdp.hpp include/confidence_bounds.hpp include/feature_brex.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp
+	$(CC) $(CFLAGS) src/brex_test.cpp -o build/brex_test.o
+	
+build/gridWorldBasicExperimentNormalized.o: src/gridWorldBasicExperimentNormalized.cpp include/mdp.hpp include/confidence_bounds.hpp include/feature_birl.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp
+	$(CC) $(CFLAGS) src/gridWorldBasicExperimentNormalized.cpp -o build/gridWorldBasicExperimentNormalized.o
+	
+	
+build/gridWorldBasicExperimentNormalizedRandom.o: src/gridWorldBasicExperimentNormalizedRandom.cpp include/mdp.hpp include/confidence_bounds.hpp include/feature_birl.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp
+	$(CC) $(CFLAGS) src/gridWorldBasicExperimentNormalizedRandom.cpp -o build/gridWorldBasicExperimentNormalizedRandom.o
 
 build/gridWorldNoisyDemoExperiment.o: src/gridWorldNoisyDemoExperiment.cpp include/mdp.hpp include/confidence_bounds.hpp include/feature_birl.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp
 	$(CC) $(CFLAGS) src/gridWorldNoisyDemoExperiment.cpp -o build/gridWorldNoisyDemoExperiment.o
 	
 build/gridWorldProjectionEvalExperiment.o: src/gridWorldProjectionEvalExperiment.cpp include/mdp.hpp include/confidence_bounds.hpp include/feature_birl.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp include/abbeel_projection.hpp
 	$(CC) $(CFLAGS) src/gridWorldProjectionEvalExperiment.cpp -o build/gridWorldProjectionEvalExperiment.o
+	
+build/gridWorldProjectionEvalExperimentRepeatedDemo.o: src/gridWorldProjectionEvalExperimentRepeatedDemo.cpp include/mdp.hpp include/confidence_bounds.hpp include/feature_birl.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp include/abbeel_projection.hpp
+	$(CC) $(CFLAGS) src/gridWorldProjectionEvalExperimentRepeatedDemo.cpp -o build/gridWorldProjectionEvalExperimentRepeatedDemo.o
 	
 build/improvementExample.o: src/improvementExample.cpp include/mdp.hpp include/confidence_bounds.hpp include/grid_domains.hpp include/unit_norm_sampling.hpp include/maxent_feature_birl.hpp
 	$(CC) $(CFLAGS) -pg src/improvementExample.cpp -o build/improvementExample.o

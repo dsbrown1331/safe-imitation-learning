@@ -8,7 +8,8 @@
 #include <fstream>
 #include <string>
 
-//Compare proposed probabilistic upper bound on policy evaluation with worst-case bound
+//Compare proposed probabilistic upper bound on policy evaluation
+//Uses a normalized version of policy evaluation (V* - Veval) / (V* - Vpessimal)
 
 //Code to run experiment shown in Figure 2 in "Efficient Probabilistic Performance Bounds for Inverse Reinforcement Learning" from AAAI 2018.
 
@@ -18,8 +19,8 @@ int main()
 {
 
     ////Experiment parameters
-    const unsigned int reps = 200;                    //repetitions per setting
-    const vector<unsigned int> numDemos = {1,3,5,7,9};            //number of demos to give
+    const unsigned int reps = 100;                    //repetitions per setting
+    const vector<unsigned int> numDemos = {1,3,5,7};            //number of demos to give
     const vector<unsigned int> rolloutLengths = {100};          //max length of each demo
     const vector<double> alphas = {100}; //50                    //confidence param for BIRL
     const unsigned int chain_length = 10000;//1000;//5000;        //length of MCMC chain
@@ -68,7 +69,7 @@ for(unsigned int rolloutLength : rolloutLengths)
             for(unsigned int rep = 0; rep < reps; rep++)
             {
                 //set up file for output
-                string filename = "GridWorldInfHorizon_numdemos" +  to_string(numDemo) 
+                string filename = "NormalizedEVD_GridWorldInfHorizon_numdemos" +  to_string(numDemo) 
                                 + "_alpha" + to_string((int)alpha) 
                                 + "_chain" + to_string(chain_length) 
                                 + "_step" + to_string(step)
@@ -90,9 +91,27 @@ for(unsigned int rolloutLength : rolloutLengths)
               
                 ///  create a random weight vector with seed and increment of rep number so same across reps
                 double* featureWeights = sample_unit_L1_norm(numFeatures);
+                double* negativeFeatureWeights = new double[numFeatures];
+                for(int i=0; i < numFeatures; i++)
+                    negativeFeatureWeights[i] = -featureWeights[i];
                     
+                cout << "features" << endl;
+                for(int i=0; i < numFeatures; i++)
+                    cout << featureWeights[i] << ", ";
+                cout << endl;
+                
+                cout << "negative features" << endl;
+                for(int i=0; i < numFeatures; i++)
+                    cout << negativeFeatureWeights[i] << ", ";
+                cout << endl;
+                
+                   
+                //normal mdp 
                 FeatureGridMDP fmdp(size, size, initStates, termStates, numFeatures, featureWeights, stateFeatures, stochastic, gamma);
+                //minus mdp (reward is negative the true return so we can solve for the pessimal policy)
+                FeatureGridMDP minus_fmdp(size, size, initStates, termStates, numFeatures, negativeFeatureWeights, stateFeatures, stochastic, gamma);
                 delete[] featureWeights;
+                delete[] negativeFeatureWeights;
                 ///  solve mdp for weights and get optimal policyLoss
                 vector<unsigned int> opt_policy (fmdp.getNumStates());
                 fmdp.valueIteration(eps);
@@ -100,18 +119,30 @@ for(unsigned int rolloutLength : rolloutLengths)
                 //mdp.displayValues();
                 cout << "features" << endl;
                 displayStateColorFeatures(stateFeatures, size, size, numFeatures);
-                fmdp.deterministicPolicyIteration(opt_policy);
+                //fmdp.deterministicPolicyIteration(opt_policy);
+                fmdp.calculateQValues();
+                fmdp.getOptimalPolicy(opt_policy);
                 cout << "-- optimal policy --" << endl;
                 fmdp.displayPolicy(opt_policy);
-                fmdp.calculateQValues();
                 cout << "-- feature weights --" << endl;
                 fmdp.displayFeatureWeights();
+                
+                
+                //solve for the pessimal policy via minus_fmdp
+                vector<unsigned int> pessimal_pi (fmdp.getNumStates());
+                minus_fmdp.valueIteration(eps);
+                minus_fmdp.calculateQValues();
+                minus_fmdp.getOptimalPolicy(pessimal_pi);
+                cout << "-- pessimal policy --" << endl;
+                minus_fmdp.displayPolicy(pessimal_pi);
+                cout << "-- pessimal feature weights --" << endl;
+                minus_fmdp.displayFeatureWeights();
 
                 ///  generate numDemo demos from the initial state distribution
                 trajectories.clear(); //used for feature counts
                 for(unsigned int d = 0; d < numDemo; d++)
                 {
-                   unsigned int s0 = initStates[d % initStates.size()];
+                   unsigned int s0 = initStates[d];
                    //cout << "demo from " << s0 << endl;
                    vector<pair<unsigned int, unsigned int>> traj = fmdp.monte_carlo_argmax_rollout(s0, rolloutLength);
                    //cout << "trajectory " << d << endl;
@@ -168,10 +199,16 @@ for(unsigned int rolloutLength : rolloutLengths)
                 //write actual, worst-case, and chain info to file
 
                 ///compute actual expected return difference
-                double trueDiff = abs(getExpectedReturn(&fmdp) - evaluateExpectedReturn(eval_pi, &fmdp, eps));
-                cout << "True difference: " << trueDiff << endl;
+                double Vstar = getExpectedReturn(&fmdp); //optimal policy expected value under true reward
+                
+                //compute the pesimal value under the true reward
+                double Vmin = evaluateExpectedReturn(pessimal_pi, &fmdp, eps);
+                //calculate (V^*_{R^*} - V^{\pi_eval}_{R^*}) / (V^*_{R^*} - V^{\pi^*(-R^*)}_{R^*})
+                //this gives a normalized distance from optimal wrt to optimal-pessimal gap.
+                double trueNormedDiff = (Vstar - evaluateExpectedReturn(eval_pi, &fmdp, eps)) / (Vstar - Vmin);
+                cout << "True difference: " << trueNormedDiff << endl;
                 outfile << "#true value --- wfcb --- mcmc ratios" << endl;
-                outfile << trueDiff << endl;
+                outfile << trueNormedDiff << endl;
                 outfile << "---" << endl;
                 //compute worst-case feature count bound
                 double wfcb = calculateWorstCaseFeatureCountBound(eval_pi, &fmdp, trajectories, eps);
@@ -185,7 +222,7 @@ for(unsigned int rolloutLength : rolloutLengths)
                 {
                     //cout.precision(5);
                     //get sampleMDP from chain
-                    GridMDP* sampleMDP = (*(birl.getRewardChain() + i));
+                    FeatureGridMDP* sampleMDP = (*(birl.getRewardChain() + i));
                     //((FeatureGridMDP*)sampleMDP)->displayFeatureWeights();
                     //cout << "===================" << endl;
                     //cout << "Reward " << i << endl;
@@ -203,9 +240,27 @@ for(unsigned int rolloutLength : rolloutLengths)
                     //cout << "Eval Policy" << endl; 
                     double Vhat = evaluateExpectedReturn(eval_pi, sampleMDP, eps);
                     //cout << Vhat << endl;
-                    double VDiff = Vstar - Vhat;
-                    //cout << "diff: " << VDiff << endl;
-                    outfile << VDiff << endl;
+                    
+                    //calculate pessimal policy
+                    vector<unsigned int> pessimal_sample_pi(sampleMDP->getNumStates());
+                    //need to create new mdp with -R 
+                    double* sample_weights = sampleMDP->getFeatureWeights();
+                    double* pessimal_weights = new double[numFeatures];
+                    for(int i=0; i < numFeatures; i++)
+                        pessimal_weights[i] = -sample_weights[i];
+                    
+                    FeatureGridMDP minus_mdp(sampleMDP->getGridWidth(), sampleMDP->getGridHeight(), sampleMDP->getInitialStates(), sampleMDP->getTerminalStates(), sampleMDP->getNumFeatures(), pessimal_weights , sampleMDP->getStateFeatures(), sampleMDP->isStochastic(), sampleMDP->getDiscount());
+                    //set the walls, if any
+                    minus_mdp.setWallStates(sampleMDP->getWallStates());
+                    //solve for pessimal policy
+                    minus_mdp.valueIteration(eps);
+                    minus_mdp.getOptimalPolicy(pessimal_sample_pi);
+                    double Vmin = evaluateExpectedReturn(pessimal_sample_pi, sampleMDP, eps);
+                    delete[] pessimal_weights;
+                    
+                    double VNormedDiff = (Vstar - Vhat) / (Vstar - Vmin);
+                    //cout << "pred diff: " << VNormedDiff << endl;
+                    outfile << VNormedDiff << endl;
                 }    
            
 
