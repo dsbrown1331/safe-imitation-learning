@@ -237,6 +237,7 @@ void FeatureBIRL::run(double eps)
     cout << "rejects: " << reject_cnt << endl;
   
 }
+
 //TODO check that this follows guidance for softmax
 double FeatureBIRL::logsumexp(double* nums, unsigned int size) {
   double max_exp = nums[0];
@@ -489,9 +490,11 @@ FeatureGridMDP* FeatureBIRL::getMeanMDP(int burn, int skip)
     int count = 0;
     for(unsigned int i=burn; i<chain_length; i+=skip)
     {
+      //  cout << i << endl;;
         count++;
+        
+      //   cout << "weights" << endl;
         //(*(R_chain + i))->displayFeatureWeights();
-        //cout << "weights" << endl;
         double* w = (*(R_chain + i))->getFeatureWeights();
         for(int f=0; f < nFeatures; f++)
             aveWeights[f] += w[f];

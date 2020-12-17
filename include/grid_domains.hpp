@@ -593,9 +593,9 @@ void displayStateColorFeatures(double** stateFeatures, unsigned int gridCols, un
 //    double yellowFeature[] = {0,0,0,1,0};
 //    double greenFeature[] = {0,0,0,0,1};
 //    
-    double whiteFeature[] = {1,0,0,0,0,0,0,0};
-    double redFeature[] = {0,1,0,0,0,0,0,0};
-    double blueFeature[] = {0,0,1,0,0,0,0,0};
+    double blueFeature[] = {1,0,0,0,0,0,0,0};
+    double whiteFeature[] = {0,1,0,0,0,0,0,0};
+    double redFeature[] = {0,0,1,0,0,0,0,0,0};
     double yellowFeature[] = {0,0,0,1,0,0,0,0};
     double greenFeature[] = {0,0,0,0,1,0,0,0};
     double cyanFeature[] = {0,0,0,0,0,1,0,0};
@@ -917,9 +917,9 @@ double** random9x9GridNavGoalWorld8Features()
     for(int i=0; i<numStates; i++)
         stateFeatures[i] = new double[numFeatures];
         
-    double whiteFeature[] = {1,0,0,0,0,0,0,0};
-    double redFeature[] = {0,1,0,0,0,0,0,0};
-    double blueFeature[] = {0,0,1,0,0,0,0,0};
+    double blueFeature[] = {1,0,0,0,0,0,0,0};
+    double whiteFeature[] = {0,1,0,0,0,0,0,0};
+    double redFeature[] = {0,0,1,0,0,0,0,0};
     double yellowFeature[] = {0,0,0,1,0,0,0,0};
     double greenFeature[] = {0,0,0,0,1,0,0,0};
     double cyanFeature[] = {0,0,0,0,0,1,0,0};
@@ -1274,6 +1274,41 @@ double** initFeatureCountToyDomain4x4(int numStates, int numFeatures)
                 break;
             case 'g':
                 std::copy(greenFeature, greenFeature+numFeatures, stateFeatures[i]);
+                break;
+        }
+    
+    }
+    return stateFeatures;
+}
+
+//example of how worst-case and simple feature count differences don't work
+double** debugDomain2x2(int numStates, int numFeatures)
+{
+     if(numStates != 4 || numFeatures != 2) 
+     {
+        cout << "[ERROR] This domain only works for 2x2 with 3 features!" << endl;
+        return nullptr;
+     }
+    double** stateFeatures;
+    stateFeatures = new double*[numStates];
+    for(int i=0; i<numStates; i++)
+        stateFeatures[i] = new double[numFeatures];
+        
+    double whiteFeature[] = {1,0};
+    double redFeature[] = {0,1};
+    
+    char features[] = {'w','w',
+                       'r','w'};
+                       
+    for(int i=0; i < numStates; i++)
+    {
+        switch(features[i])
+        {
+            case 'w':
+                std::copy(whiteFeature, whiteFeature+numFeatures, stateFeatures[i]);
+                break;
+            case 'r':
+                std::copy(redFeature, redFeature+numFeatures, stateFeatures[i]);
                 break;
         }
     

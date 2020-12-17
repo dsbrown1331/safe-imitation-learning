@@ -181,9 +181,9 @@ void FeatureBREX::run(double eps)
       //temp_mdp->calculateQValues();
       
       double new_posterior = calculatePosterior(temp_mdp);
-      //cout << "posterior: " << new_posterior << endl;
+      //cout << "nwe posterior: " << new_posterior << endl;
       double probability = min((double)1.0, exp(new_posterior - posterior));
-      //cout << probability << endl;
+      //cout << "probability accept = " << probability << endl;
 
       //transition with probability
       double r = ((double) rand() / (RAND_MAX));
@@ -198,6 +198,10 @@ void FeatureBREX::run(double eps)
          //if (itr%100 == 0) cout << itr << ": " << posteriors[itr] << endl;
          if(posteriors[itr] > MAPposterior)
          {
+           cout << "iter " << itr << endl;
+           cout << "new MAP" << endl;
+           temp_mdp->displayFeatureWeights();
+
            MAPposterior = posteriors[itr];
            //TODO remove set terminals, right? why here in first place?
            MAPmdp->setFeatureWeights(mdp->getFeatureWeights());
@@ -232,7 +236,7 @@ void FeatureBREX::run(double eps)
       
     
     }
-    cout << "rejects: " << reject_cnt << endl;
+    cout << "accepts / total: " << chain_length - reject_cnt << "/" << chain_length << endl;
   
 }
 //optimized version
@@ -278,16 +282,22 @@ double FeatureBREX::calculatePosterior(FeatureGridMDP* gmdp) //assuming uniform 
       pair<unsigned int,unsigned int> trajpair = pairwise_preferences[i];
       unsigned int worse_idx =  trajpair.first;
       unsigned int better_idx = trajpair.second; 
+      //cout << "prefrence: " << worse_idx << " < " << better_idx << endl;
       vector<double> fcounts_better = fcounts[better_idx];
       vector<double> fcounts_worse = fcounts[worse_idx];
       //compute dot products
       double better_return = dotProduct(weights, &fcounts_better[0], nfeatures);
       double worse_return = dotProduct(weights, &fcounts_worse[0], nfeatures);
+      //cout << "better return = " << better_return << "  worse return = " << worse_return << endl; 
       double Z [2];
       Z[0] = alpha * better_return;
       Z[1] = alpha * worse_return;
-                
-      posterior += alpha * better_return - logsumexp(Z, 2);
+      //cout << Z[0] << "," << Z[1] << endl;
+      float pairwise_likelihood = alpha * better_return - logsumexp(Z, 2);
+      //cout << alpha * better_return << endl;
+      //cout << logsumexp(Z,2) << endl;
+      //cout << worse_idx << " < " << better_idx << "  loglikelihood = " << pairwise_likelihood << endl;
+      posterior += pairwise_likelihood;
       //cout << state << "," << action << ": " << posterior << endl;
    }
    
@@ -366,10 +376,10 @@ void FeatureBREX::addTrajectories(vector<vector<pair<unsigned int,unsigned int> 
     fcounts.push_back(fcs);
   }
 
-  // for(int t = 0; t < fcounts.size(); t++)
+  // for(unsigned int t = 0; t < fcounts.size(); t++)
   // {
   //   cout << "fcounts " << t << endl;
-  //   for(int i = 0;  i < fcounts[t].size(); i++)
+  //   for(unsigned int i = 0;  i < fcounts[t].size(); i++)
   //     cout << fcounts[t][i] << ",";
   //   cout << endl;
   // }
@@ -382,6 +392,7 @@ void FeatureBREX::addPairwisePreferences(vector<pair<unsigned int,unsigned int> 
   for(pair<unsigned int, unsigned int> p : prefs)
     pairwise_preferences.push_back(p);
 
+  // cout <<"preferences" << endl;
   // for(pair<unsigned int, unsigned int> p : pairwise_preferences)
   //   cout << "(" << p.first << ", " << p.second << ")" << endl;
 
